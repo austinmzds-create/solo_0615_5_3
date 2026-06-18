@@ -3,7 +3,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
-import { validateLogin } from '../utils/auth'
+import { validateLogin, saveSessionUser, getRoleDashboardRoute } from '../utils/auth'
 import { mockUsers } from '../mock/accounts'
 
 const router = useRouter()
@@ -52,10 +52,12 @@ const handleLogin = async () => {
           localStorage.removeItem(REMEMBERED_USERNAME_KEY)
         }
         localStorage.setItem(CURRENT_USER_KEY, result.user.username)
+        saveSessionUser(result.user)
         ElMessage.success(result.message)
 
-        if (result.user.role === 'teacher') {
-          router.replace('/leave-approval')
+        const dashboard = getRoleDashboardRoute(result.user.role)
+        if (dashboard) {
+          router.replace(dashboard)
         } else {
           ElMessage.info('当前仅支持教师端请假审批功能')
         }

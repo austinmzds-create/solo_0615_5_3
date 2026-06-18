@@ -10,6 +10,7 @@ import {
   type LeaveStatus
 } from '../mock/leaves'
 import { mockUsers } from '../mock/accounts'
+import { getSessionUser, clearSessionUser } from '../utils/auth'
 
 const router = useRouter()
 
@@ -37,9 +38,7 @@ const rejectRules: FormRules = {
 }
 
 const currentUser = computed(() => {
-  const username = localStorage.getItem('smart_campus_current_user')
-  if (!username) return null
-  return mockUsers.find((u) => u.username === username) || null
+  return getSessionUser()
 })
 
 const tabCounts = computed(() => {
@@ -163,7 +162,7 @@ const handleRejectConfirm = async () => {
 }
 
 const handleLogout = () => {
-  localStorage.removeItem('smart_campus_current_user')
+  clearSessionUser()
   router.replace('/login')
 }
 </script>

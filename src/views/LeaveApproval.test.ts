@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ElementPlus, { ElMessageBox, ElMessage } from 'element-plus'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import LeaveApproval from './LeaveApproval.vue'
 import { mockUsers } from '../mock/accounts'
 import {
@@ -9,23 +10,33 @@ import {
   STORAGE_KEY,
   type LeaveApplication
 } from '../mock/leaves'
+import { SESSION_USER_KEY } from '../utils/auth'
 
-const USER_STORAGE_KEY = 'smart_campus_current_user'
+const createMockRouter = () => {
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/login', component: { template: '<div>Login</div>' } },
+      { path: '/leave-approval', component: LeaveApproval }
+    ]
+  })
+}
 
 const mountLeaveApproval = () => {
   return mount(LeaveApproval, {
     global: {
-      plugins: [ElementPlus]
+      plugins: [ElementPlus, createMockRouter()]
     }
   })
 }
 
 const setTeacherLogin = () => {
-  localStorage.setItem(USER_STORAGE_KEY, 'teacher')
+  const teacher = mockUsers.find((u) => u.role === 'teacher')!
+  sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(teacher))
 }
 
 const clearStorage = () => {
-  localStorage.removeItem(USER_STORAGE_KEY)
+  sessionStorage.removeItem(SESSION_USER_KEY)
   localStorage.removeItem(STORAGE_KEY)
 }
 

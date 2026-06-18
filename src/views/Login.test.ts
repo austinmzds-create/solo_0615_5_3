@@ -4,6 +4,7 @@ import ElementPlus from 'element-plus'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import Login from './Login.vue'
 import { mockUsers } from '../mock/accounts'
+import { SESSION_USER_KEY, getSessionUser } from '../utils/auth'
 
 const REMEMBERED_USERNAME_KEY = 'smart_campus_remembered_username'
 
@@ -63,10 +64,12 @@ describe('Login.vue', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     localStorage.clear()
+    sessionStorage.clear()
   })
 
   afterEach(() => {
     localStorage.clear()
+    sessionStorage.clear()
   })
 
   describe('三类测试账号登录成功', () => {
@@ -374,6 +377,217 @@ describe('Login.vue', () => {
       await wrapper.vm.$nextTick()
 
       expect(localStorage.getItem(REMEMBERED_USERNAME_KEY)).toBeNull()
+    })
+  })
+
+  describe('会话恢复 - sessionStorage', () => {
+    it('教师登录成功后，sessionStorage 应保存完整的用户会话信息', async () => {
+      const wrapper = mountLogin()
+      const teacher = mockUsers[1]
+
+      await fillLoginForm(wrapper, teacher.username, teacher.password)
+      await clickLoginButton(wrapper)
+
+      await vi.advanceTimersByTimeAsync(600)
+      await wrapper.vm.$nextTick()
+
+      const sessionUser = getSessionUser()
+      expect(sessionUser).not.toBeNull()
+      expect(sessionUser?.username).toBe(teacher.username)
+      expect(sessionUser?.role).toBe(teacher.role)
+      expect(sessionUser?.name).toBe(teacher.name)
+      expect(sessionUser?.roleLabel).toBe(teacher.roleLabel)
+    })
+
+    it('管理员登录成功后，sessionStorage 也应保存用户会话', async () => {
+      const wrapper = mountLogin()
+      const admin = mockUsers[0]
+
+      await fillLoginForm(wrapper, admin.username, admin.password)
+      await clickLoginButton(wrapper)
+
+      await vi.advanceTimersByTimeAsync(600)
+      await wrapper.vm.$nextTick()
+
+      const sessionUser = getSessionUser()
+      expect(sessionUser).not.toBeNull()
+      expect(sessionUser?.username).toBe(admin.username)
+      expect(sessionUser?.role).toBe('admin')
+    })
+
+    it('登录失败时，sessionStorage 不应保存任何会话', async () => {
+      const wrapper = mountLogin()
+
+      await fillLoginForm(wrapper, 'teacher', 'wrongpassword')
+      await clickLoginButton(wrapper)
+
+      await vi.advanceTimersByTimeAsync(600)
+      await wrapper.vm.$nextTick()
+
+      const sessionUser = getSessionUser()
+      expect(sessionUser).toBeNull()
+      expect(sessionStorage.getItem(SESSION_USER_KEY)).toBeNull()
+    })
+
+    it('已登录教师访问登录页时，应自动跳转到教师工作台', async () => {
+      const teacher = mockUsers[1]
+      sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(teacher))
+
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: '/', redirect: '/login' },
+          {
+            path: '/login',
+            component: Login,
+            meta: { public: true }
+          },
+          {
+            path: '/leave-approval',
+            name: 'LeaveApproval',
+            component: { template: '<div>Leave Approval</div>' },
+            meta: { role: 'teacher' }
+          }
+        ]
+      })
+
+      router.beforeEach((to, _from, next) => {
+        const raw = sessionStorage.getItem(SESSION_USER_KEY)
+        const sessionUser = raw ? JSON.parse(raw) : null
+
+        if (to.meta.public) {
+          if (sessionUser && sessionUser.role === 'teacher') {
+            next('/leave-approval')
+            return
+          }
+          next()
+          return
+        }
+
+        if (!sessionUser) {
+          next('/login')
+          return
+        }
+
+        if (to.meta.role && to.meta.role !== sessionUser.role) {
+          next('/login')
+          return
+        }
+
+        next()
+      })
+
+      await router.push('/login')
+      await router.isReady()
+
+      expect(router.currentRoute.value.path).toBe('/leave-approval')
+    })
+
+    it('未登录用户访问受保护页面时，应跳转到登录页', async () => {
+      sessionStorage.clear()
+
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: '/', redirect: '/login' },
+          {
+            path: '/login',
+            component: Login,
+            meta: { public: true }
+          },
+          {
+            path: '/leave-approval',
+            name: 'LeaveApproval',
+            component: { template: '<div>Leave Approval</div>' },
+            meta: { role: 'teacher' }
+          }
+        ]
+      })
+
+      router.beforeEach((to, _from, next) => {
+        const raw = sessionStorage.getItem(SESSION_USER_KEY)
+        const sessionUser = raw ? JSON.parse(raw) : null
+
+        if (to.meta.public) {
+          if (sessionUser && sessionUser.role === 'teacher') {
+            next('/leave-approval')
+            return
+          }
+          next()
+          return
+        }
+
+        if (!sessionUser) {
+          next('/login')
+          return
+        }
+
+        if (to.meta.role && to.meta.role !== sessionUser.role) {
+          next('/login')
+          return
+        }
+
+        next()
+      })
+
+      await router.push('/leave-approval')
+      await router.isReady()
+
+      expect(router.currentRoute.value.path).toBe('/login')
+    })
+
+    it('已登录用户访问根路径时，最终应进入对应工作台', async () => {
+      const teacher = mockUsers[1]
+      sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(teacher))
+
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: '/', redirect: '/login' },
+          {
+            path: '/login',
+            component: Login,
+            meta: { public: true }
+          },
+          {
+            path: '/leave-approval',
+            name: 'LeaveApproval',
+            component: { template: '<div>Leave Approval</div>' },
+            meta: { role: 'teacher' }
+          }
+        ]
+      })
+
+      router.beforeEach((to, _from, next) => {
+        const raw = sessionStorage.getItem(SESSION_USER_KEY)
+        const sessionUser = raw ? JSON.parse(raw) : null
+
+        if (to.meta.public) {
+          if (sessionUser && sessionUser.role === 'teacher') {
+            next('/leave-approval')
+            return
+          }
+          next()
+          return
+        }
+
+        if (!sessionUser) {
+          next('/login')
+          return
+        }
+
+        if (to.meta.role && to.meta.role !== sessionUser.role) {
+          next('/login')
+          return
+        }
+
+        next()
+      })
+
+      await router.push('/')
+      await router.isReady()
+
+      expect(router.currentRoute.value.path).toBe('/leave-approval')
     })
   })
 })
