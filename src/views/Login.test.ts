@@ -1,13 +1,26 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import Login from './Login.vue'
 import { mockUsers } from '../mock/accounts'
+
+const REMEMBERED_USERNAME_KEY = 'smart_campus_remembered_username'
+
+const createMockRouter = () => {
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/login', component: Login },
+      { path: '/leave-approval', component: { template: '<div>Leave Approval</div>' } }
+    ]
+  })
+}
 
 const mountLogin = () => {
   return mount(Login, {
     global: {
-      plugins: [ElementPlus]
+      plugins: [ElementPlus, createMockRouter()]
     }
   })
 }
@@ -35,9 +48,25 @@ const clickLoginButton = async (wrapper: any) => {
   }
 }
 
+const findRememberMeCheckbox = (wrapper: any) => {
+  return wrapper.find('.el-checkbox input[type="checkbox"]')
+}
+
+const toggleRememberMe = async (wrapper: any) => {
+  const checkbox = findRememberMeCheckbox(wrapper)
+  if (checkbox) {
+    await checkbox.setChecked(!checkbox.element.checked)
+  }
+}
+
 describe('Login.vue', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    localStorage.clear()
   })
 
   describe('三类测试账号登录成功', () => {
@@ -206,6 +235,145 @@ describe('Login.vue', () => {
       expect(successSection.exists()).toBe(true)
       expect(successSection.text()).toContain(student.name)
       expect(successSection.text()).toContain(student.roleLabel)
+    })
+  })
+
+  describe('记住账号功能回归测试', () => {
+    it('勾选记住账号并登录成功后，localStorage 应保存当前账号', async () => {
+      const wrapper = mountLogin()
+      const teacher = mockUsers[1]
+
+      await fillLoginForm(wrapper, teacher.username, teacher.password)
+      await toggleRememberMe(wrapper)
+      await wrapper.vm.$nextTick()
+      expect((wrapper.vm as any).rememberMe).toBe(true)
+
+      await clickLoginButton(wrapper)
+      await vi.advanceTimersByTimeAsync(600)
+      await wrapper.vm.$nextTick()
+
+      expect(localStorage.getItem(REMEMBERED_USERNAME_KEY)).toBe(teacher.username)
+    })
+
+    it('取消勾选记住账号并登录成功后，localStorage 中已保存的账号应被清除', async () => {
+      const teacher = mockUsers[1]
+      localStorage.setItem(REMEMBERED_USERNAME_KEY, teacher.username)
+
+      const wrapper = mountLogin()
+      await wrapper.vm.$nextTick()
+
+      const usernameInput = findInputByPlaceholder(wrapper, '请输入账号')
+      expect(usernameInput.element.value).toBe(teacher.username)
+      expect((wrapper.vm as any).rememberMe).toBe(true)
+
+      await toggleRememberMe(wrapper)
+      await wrapper.vm.$nextTick()
+      expect((wrapper.vm as any).rememberMe).toBe(false)
+
+      const passwordInput = findInputByPlaceholder(wrapper, '请输入密码')
+      if (passwordInput) {
+        await passwordInput.setValue(teacher.password)
+      }
+
+      await clickLoginButton(wrapper)
+      await vi.advanceTimersByTimeAsync(600)
+      await wrapper.vm.$nextTick()
+
+      expect(localStorage.getItem(REMEMBERED_USERNAME_KEY)).toBeNull()
+    })
+
+    it('取消勾选记住账号时不应立即清除 localStorage（仅登录成功后清除）', async () => {
+      const teacher = mockUsers[1]
+      localStorage.setItem(REMEMBERED_USERNAME_KEY, teacher.username)
+
+      const wrapper = mountLogin()
+      await wrapper.vm.$nextTick()
+
+      expect(localStorage.getItem(REMEMBERED_USERNAME_KEY)).toBe(teacher.username)
+
+      await toggleRememberMe(wrapper)
+      await wrapper.vm.$nextTick()
+      expect((wrapper.vm as any).rememberMe).toBe(false)
+
+      expect(localStorage.getItem(REMEMBERED_USERNAME_KEY)).toBe(teacher.username)
+    })
+
+    it('localStorage 中有已保存账号时，进入登录页应预填账号并自动勾选记住账号', async () => {
+      const admin = mockUsers[0]
+      localStorage.setItem(REMEMBERED_USERNAME_KEY, admin.username)
+
+      const wrapper = mountLogin()
+      await wrapper.vm.$nextTick()
+
+      const usernameInput = findInputByPlaceholder(wrapper, '请输入账号')
+      expect(usernameInput.element.value).toBe(admin.username)
+      expect((wrapper.vm as any).rememberMe).toBe(true)
+    })
+
+    it('localStorage 中无已保存账号时，进入登录页账号为空且记住账号未勾选', async () => {
+      localStorage.clear()
+
+      const wrapper = mountLogin()
+      await wrapper.vm.$nextTick()
+
+      const usernameInput = findInputByPlaceholder(wrapper, '请输入账号')
+      expect(usernameInput.element.value).toBe('')
+      expect((wrapper.vm as any).rememberMe).toBe(false)
+    })
+
+    it('已保存账号被清除后，再次进入登录页不应预填旧账号', async () => {
+      const teacher = mockUsers[1]
+      localStorage.setItem(REMEMBERED_USERNAME_KEY, teacher.username)
+
+      const wrapper1 = mountLogin()
+      await wrapper1.vm.$nextTick()
+      const usernameInput1 = findInputByPlaceholder(wrapper1, '请输入账号')
+      expect(usernameInput1.element.value).toBe(teacher.username)
+
+      await toggleRememberMe(wrapper1)
+      await wrapper1.vm.$nextTick()
+      expect((wrapper1.vm as any).rememberMe).toBe(false)
+
+      const passwordInput = findInputByPlaceholder(wrapper1, '请输入密码')
+      if (passwordInput) {
+        await passwordInput.setValue(teacher.password)
+      }
+
+      await clickLoginButton(wrapper1)
+      await vi.advanceTimersByTimeAsync(600)
+      await wrapper1.vm.$nextTick()
+
+      expect(localStorage.getItem(REMEMBERED_USERNAME_KEY)).toBeNull()
+
+      wrapper1.unmount()
+
+      const wrapper2 = mountLogin()
+      await wrapper2.vm.$nextTick()
+
+      const usernameInput2 = findInputByPlaceholder(wrapper2, '请输入账号')
+      expect(usernameInput2.element.value).toBe('')
+      expect((wrapper2.vm as any).rememberMe).toBe(false)
+    })
+
+    it('勾选记住账号后又取消勾选，登录成功后不应保存账号', async () => {
+      const wrapper = mountLogin()
+      const admin = mockUsers[0]
+
+      await fillLoginForm(wrapper, admin.username, admin.password)
+
+      await toggleRememberMe(wrapper)
+      await wrapper.vm.$nextTick()
+      expect((wrapper.vm as any).rememberMe).toBe(true)
+
+      await toggleRememberMe(wrapper)
+      await wrapper.vm.$nextTick()
+      expect((wrapper.vm as any).rememberMe).toBe(false)
+
+      await clickLoginButton(wrapper)
+      await vi.advanceTimersByTimeAsync(600)
+      await wrapper.vm.$nextTick()
+
+      expect(localStorage.getItem(REMEMBERED_USERNAME_KEY)).toBeNull()
     })
   })
 })

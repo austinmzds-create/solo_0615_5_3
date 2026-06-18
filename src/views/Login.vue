@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import { validateLogin } from '../utils/auth'
-import { mockUsers, type MockUser } from '../mock/accounts'
+import { mockUsers } from '../mock/accounts'
 
 const router = useRouter()
 
@@ -33,10 +33,7 @@ onMounted(() => {
   }
 })
 
-const handleRememberMeChange = (val: boolean) => {
-  if (!val) {
-    localStorage.removeItem(REMEMBERED_USERNAME_KEY)
-  }
+const handleRememberMeChange = (_val: boolean) => {
 }
 
 const handleLogin = async () => {
