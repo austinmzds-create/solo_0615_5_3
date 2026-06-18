@@ -127,13 +127,12 @@ const handleApprove = async (row: LeaveApplication) => {
       cancelButtonText: '取消',
       type: 'success'
     })
-    const target = applications.value.find((a) => a.id === row.id)
-    if (target) {
-      target.status = 'approved'
-      target.approvedAt = new Date().toLocaleString('zh-CN')
-      saveApplications(applications.value)
-      ElMessage.success('已通过该申请')
-    }
+    const now = new Date().toLocaleString('zh-CN')
+    applications.value = applications.value.map((a) =>
+      a.id === row.id ? { ...a, status: 'approved', approvedAt: now } : a
+    )
+    saveApplications(applications.value)
+    ElMessage.success('已通过该申请')
   } catch {
     // cancelled
   }
@@ -149,16 +148,15 @@ const handleRejectConfirm = async () => {
   if (!rejectFormRef.value) return
   await rejectFormRef.value.validate((valid) => {
     if (!valid) return
-    const target = applications.value.find(
-      (a) => a.id === currentApplication.value?.id
+    const now = new Date().toLocaleString('zh-CN')
+    const reason = rejectReason.value
+    applications.value = applications.value.map((a) =>
+      a.id === currentApplication.value?.id
+        ? { ...a, status: 'rejected', rejectReason: reason, approvedAt: now }
+        : a
     )
-    if (target) {
-      target.status = 'rejected'
-      target.rejectReason = rejectReason.value
-      target.approvedAt = new Date().toLocaleString('zh-CN')
-      saveApplications(applications.value)
-      ElMessage.warning('已驳回该申请')
-    }
+    saveApplications(applications.value)
+    ElMessage.warning('已驳回该申请')
     rejectDialogVisible.value = false
     detailVisible.value = false
   })
